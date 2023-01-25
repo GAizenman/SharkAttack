@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>three.js webgl - skinning and morphing</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+</head>
+
+<body>
+
+
+	<script type="module">
+
+	import * as THREE from '../build/three.module.js';
+
+	import Stats from './jsm/libs/stats.module.js';
+	import { GUI } from './jsm/libs/dat.gui.module.js';
+	import { FlyControls } from './jsm/libs/FlyControls.js';
+	import { Water } from './jsm/libs/Water.js';
+	import { Sky } from './jsm/libs/Sky.js'
+
+	import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+
+	let container, stats, clock, gui, mixer, actions, activeAction, previousAction;
+	let camera, scene, renderer, model, face, controls, shark, shark2, origin;
+
+	let water, sun;
+	var pivotPoint, pivotPoint2;
+	const api = { state: 'Idle' };
+
+	init();
+	animate();
+
+	function init() {
+
+		container = document.createElement( 'div' );
+		document.body.appendChild( container );
+
+		camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.25, 200 );
+		camera.position.set( - 3*2, 3*2, 10*2 );
+		camera.lookAt( new THREE.Vector3( 0, 2, 0 ) );
+
+		scene = new THREE.Scene();
+		//scene.background = new THREE.Color( 0xe0e0e0 );
+		//scene.fog = new THREE.Fog( 0xe0e0e0, 20, 100 );
+
+		clock = new THREE.Clock();
+
+		// lights
+
+		const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444 );
+		hemiLight.position.set( 0, 20, 0 );
+		scene.add( hemiLight );
+
+		const dirLight = new THREE.DirectionalLight( 0xffffff );
+		dirLight.position.set( 0, 20, 10 );
+		scene.add( dirLight );
+		//plank Mesh
+		const cubes = [];
+		const plank = new THREE.BoxGeometry( 5, 0.5 , 8);
+		const loader1 = new THREE.TextureLoader();
+		loader1.load('./images/wood2.jpg', (texture) => {
+			const plankMaterial = new THREE.MeshBasicMaterial({
+				map: texture,
+			});
+			const cube = new THREE.Mesh(plank, plankMaterial);
+			cube.position.set(0, -0.1, 0);
+			scene.add(cube);
+			cubes.push(cube);
+		});
+		// model
+		const models = [];
+		const loader = new GLTFLoader();
+		loader.load( 'models/gltf/RobotExpressive/RobotExpressive.glb', function ( gltf ) {
+
+			model = gltf.scene;
+			scene.add( model );
+			models.push(model);
+			model.position.set(0, 0, 0);
+			createGUI( model, gltf.animations );
+
+		}, undefined, function ( e ) {
+
+			console.error( e );
+
+		} );
+		// Sphere Geometry 1
+		let originGeo = new THREE.SphereBufferGeometry(100, 30, 30);
+
+		// Sphere Material 1
+		let originMat = new THREE.MeshLambertMaterial({
+			color: 0xfccdd3
+		});
+
+		const sharks = [];
+		//loads in shark1
+		origin = new THREE.Mesh(originGeo, originMat);
+		scene.add(origin);
+		origin.position.set(0, 0, -3);
+		pivotPoint = new THREE.Object3D();
+		origin.add(pivotPoint);
+		loader.load( 'models/gltf/RobotExpressive/shark.glb', function ( gltf ) {
+
+			shark = gltf.scene;
+			scene.add( shark );
+			sharks.push(shark);
+
+			shark.position.set(13, -3.5, 0);
+			pivotPoint.add(shark);
+
+		}, undefined, function ( e ) {
+
+			console.error( e );
+
+		} );
+		//loads in shark2
+		pivotPoint2 = new THREE.Object3D();
+		origin.add(pivotPoint2);
+		loader.load( 'models/gltf/RobotExpressive/shark.glb', function ( gltf ) {
+
+			shark2 = gltf.scene;
+			scene.add( shark2 );
+			sharks.push(shark2);
+
+			shark2.position.set(16, -3.5, 0);
+			shark2.rotation.y = 110;
+			// shark2.rotation;
+
+			pivotPoint2.add(shark2);
+
+		}, undefined, function ( e ) {
+
+			console.error( e );
+
+		} );
+
+
+		//renders robot, sharks, and plank
+		function render() {
+
+			const time = performance.now() * 0.001;
+			//pivots shark1
+			pivotPoint.rotation.y -= 0.01;
+			pivotPoint.rotation.x = Math.sin( time*2 )*0.05;
+			//pivots shark 2
+			pivotPoint2.rotation.y += 0.01;
+			pivotPoint2.rotation.x = Math.sin( time*2 )*0.05;
+			//makes the plank and the robot look buoyant, bouncing
+			cubes.forEach((cube, ndx) => {
+				cube.position.set(0, Math.sin( time*3 )*0.1 + -0.1, 0);
+
+			});
+			models.forEach((model, ndx) => {
+				model.position.set(0, Math.sin( time*3 )*0.1 + 0.2, 0);
+
+			});
+
+			renderer.render(scene, camera);
+
+			requestAnimationFrame(render);
+		}
+		requestAnimationFrame(render);
+
+		renderer = new THREE.WebGLRenderer( { antialias: true } );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.outputEncoding = THREE.sRGBEncoding;
+		renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		container.appendChild( renderer.domElement );
+
+		controls = new FlyControls( camera, renderer.domElement );
+		controls.movementSpeed = 5000;
+		controls.rollSpeed = Math.PI*50;
+		controls.autoForward = false;
+		controls.dragToLook = true;
+
+		window.addEventListener( 'resize', onWindowResize );
+
+		// stats
+		stats = new Stats();
+		container.appendChild( stats.dom );
+
+		sun = new THREE.Vector3();
+
+		// Water
+
+		const waterGeometry = new THREE.PlaneGeometry( 500, 500 );
+
+		water = new Water(
+			waterGeometry,
+			{
+				textureWidth: 200,
+				textureHeight: 200,
+				waterNormals: new THREE.TextureLoader().load( './images/waternormals.jpg', function ( texture ) {
+
+					texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+
+				} ),
+				sunDirection: new THREE.Vector3(),
+				sunColor: 0xffffff,
+				waterColor: 0x001e0f,
+				distortionScale: 3.7,
+				fog: scene.fog !== undefined
+			}
+		);
+
+		water.rotation.x = - Math.PI / 2;
+
+		scene.add( water );
+
+		// Skybox
+
+		const sky = new Sky();
+		sky.scale.setScalar( 1000 );
+		scene.add( sky );
+
+		const skyUniforms = sky.material.uniforms;
+
+		skyUniforms[ 'turbidity' ].value = 10;
+		skyUniforms[ 'rayleigh' ].value = 2;
+		skyUniforms[ 'mieCoefficient' ].value = 0.005;
+		skyUniforms[ 'mieDirectionalG' ].value = 0.8;
+
+		const parameters = {
+			elevation: 0,
+			azimuth: 180
+		};
+
+		const pmremGenerator = new THREE.PMREMGenerator( renderer );
+
+		function updateSun() {
+
+			const phi = THREE.MathUtils.degToRad( 90 - parameters.elevation );
+			const theta = THREE.MathUtils.degToRad( parameters.azimuth );
+
+			sun.setFromSphericalCoords( 1, phi, theta );
+
+			sky.material.uniforms[ 'sunPosition' ].value.copy( sun );
+			water.material.uniforms[ 'sunDirection' ].value.copy( sun ).normalize();
+
+			scene.environment = pmremGenerator.fromScene( sky ).texture;
+
+		}
+
+		updateSun();
+
+	}
+
+	function createGUI( model, animations ) {
+
+		const states = [ 'Idle', 'Walking', 'Running', 'Dance', 'Death', 'Sitting', 'Standing'];
+		const emotes = [ 'Jump', 'Yes', 'No', 'Wave', 'Punch', 'ThumbsUp' ];
+
+		gui = new GUI();
+
+		mixer = new THREE.AnimationMixer( model );
+
+		actions = {};
+
+		for ( let i = 0; i < animations.length; i ++ ) {
+
+			const clip = animations[ i ];
+			const action = mixer.clipAction( clip );
+			actions[ clip.name ] = action;
+
+			if ( emotes.indexOf( clip.name ) >= 0 || states.indexOf( clip.name ) >= 4 ) {
+
+				action.clampWhenFinished = true;
+				action.loop = THREE.LoopOnce;
+
+			}
+
+		}
+
+		// states
+
+		const statesFolder = gui.addFolder( 'States' );
+
+		const clipCtrl = statesFolder.add( api, 'state' ).options( states );
+
+		clipCtrl.onChange( function () {
+
+			fadeToAction( api.state, 0.5 );
+
+		} );
+
+		//statesFolder.open();
+
+		// emotes
+
+		const emoteFolder = gui.addFolder( 'Emotes' );
+
+		function createEmoteCallback( name ) {
+
+			api[ name ] = function () {
+
+				fadeToAction( name, 0.2 );
+
+				mixer.addEventListener( 'finished', restoreState );
+
+			};
+
+			emoteFolder.add( api, name );
+
+		}
+
+		function restoreState() {
+
+			mixer.removeEventListener( 'finished', restoreState );
+
+			fadeToAction( api.state, 0.2 );
+
+		}
+
+		for ( let i = 0; i < emotes.length; i ++ ) {
+
+			createEmoteCallback( emotes[ i ] );
+
+		}
+
+		//emoteFolder.open();
+
+		// expressions
+		face = model.getObjectByName( 'Head_4' );
+
+		const expressions = Object.keys( face.morphTargetDictionary );
+		const expressionFolder = gui.addFolder( 'Expressions' );
+
+		for ( let i = 0; i < expressions.length; i ++ ) {
+
+			expressionFolder.add( face.morphTargetInfluences, i, 0, 1, 0.01 ).name( expressions[ i ] );
+
+		}
+
+		activeAction = actions[ 'Idle' ];
+		activeAction.play();
+
+		//expressionFolder.open();
+
+	}
+
+	function fadeToAction( name, duration ) {
+
+		previousAction = activeAction;
+		activeAction = actions[ name ];
+
+		if ( previousAction !== activeAction ) {
+
+			previousAction.fadeOut( duration );
+
+		}
+
+		activeAction
+		.reset()
+		.setEffectiveTimeScale( 1 )
+		.setEffectiveWeight( 1 )
+		.fadeIn( duration )
+		.play();
+
+	}
+
+	function onWindowResize() {
+
+		camera.aspect = window.innerWidth / window.innerHeight;
+		camera.updateProjectionMatrix();
+
+		renderer.setSize( window.innerWidth, window.innerHeight );
+
+	}
+	// function resizeRendererToDisplaySize(renderer) {
+	// 	const canvas = renderer.domElement;
+	// 	const width = canvas.clientWidth;
+	// 	const height = canvas.clientHeight;
+	// 	const needResize = canvas.width !== width || canvas.height !== height;
+	// 	if (needResize) {
+	// 		renderer.setSize(width, height, false);
+	// 	}
+	// 	return needResize;
+	// }
+	//
+
+	function animate() {
+
+		const dt = clock.getDelta();
+
+		if ( mixer ) mixer.update( dt );
+
+		requestAnimationFrame( animate );
+
+		controls.update( clock.getDelta() );
+
+		water.material.uniforms[ 'time' ].value += 1.0 / 120.0;
+
+		renderer.render( scene, camera );
+
+		stats.update();
+
+	}
+
+	</script>
+
+</body>
+</html>
