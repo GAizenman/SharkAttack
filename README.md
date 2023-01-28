@@ -9,6 +9,4 @@ so you can use the arrow keys to rotate and the WASD keys to move. You can also
 click and drag your mouse on the screen to roatate the camera. Finally, when you
 go to the controls in the top right, you can change some aspects of Mr.Robot himself!
 Have fun!<br>
-<br>Update: some files have updated and the app won't load. Sorry for the inconvenience,
-but if you would like to know more and see a video of the product while it was still operational, 
-please download the code, unzip it, and check the features file!
+<br>You can check out the results yourself at https://people.ucsc.edu/~cachtayl/sharkattack/prog5/features.html
